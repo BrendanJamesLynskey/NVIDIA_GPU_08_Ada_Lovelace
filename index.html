@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NVIDIA GPU Architectures 08 — Ada Lovelace Deep Dive</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 .accent {
+            color: var(--accent);
+        }
+
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Tag Pills ── */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+
+        /* ── Pipeline Flow Bar ── */
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .pipeline-arrow {
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        /* ── Slides ── */
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .slide p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .slide p strong {
+            color: var(--text-primary);
+        }
+
+        .slide ul, .slide ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .slide li {
+            margin-bottom: 0.4rem;
+        }
+
+        .slide li strong {
+            color: var(--text-primary);
+        }
+
+        /* ── Code Blocks ── */
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+        }
+
+        /* Syntax highlighting (manual) */
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+
+        /* ── Tables ── */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(13, 17, 23, 0.5);
+        }
+
+        /* ── Diagrams ── */
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .diagram-box.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+        }
+
+        .diagram-box.dim {
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+
+        .diagram-arrow {
+            color: var(--accent);
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        /* Vertical flow diagrams */
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-vertical .diagram-arrow {
+            font-size: 1.1rem;
+        }
+
+        /* Nested hierarchy diagram */
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .hierarchy-level {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .hierarchy-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .hierarchy-item.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+        }
+
+        /* Grid diagram */
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-grid.cols-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .diagram-grid.cols-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .diagram-panel.accent-border {
+            border-left: 3px solid var(--accent);
+        }
+
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .diagram-panel p, .diagram-panel ul {
+            font-size: 0.85rem;
+        }
+
+        /* ── Callout Boxes ── */
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+        }
+
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+
+        /* ── Tier Visual ── */
+        .tier-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .tier-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tier-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 90px;
+            text-align: right;
+        }
+
+        .tier-fill {
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            white-space: nowrap;
+            transition: width 0.6s ease;
+        }
+
+        .tier-cost {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            min-width: 70px;
+        }
+
+        /* ── Contents list ── */
+        .contents-list {
+            list-style: none;
+            padding-left: 0;
+            counter-reset: contents;
+        }
+
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .contents-list li:last-child {
+            border-bottom: none;
+        }
+
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+
+        .contents-list a {
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .contents-list a:hover {
+            color: var(--accent);
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .slide {
+                padding: 3rem 1rem;
+                min-height: auto;
+            }
+
+            .slide-number {
+                font-size: 3rem;
+                top: 1.5rem;
+                right: 1rem;
+            }
+
+            .slide h2 {
+                font-size: 1.5rem;
+            }
+
+            .diagram-grid.cols-2,
+            .diagram-grid.cols-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .pipeline {
+                gap: 0.15rem;
+            }
+
+            .pipeline-step {
+                font-size: 0.6rem;
+                padding: 0.2rem 0.4rem;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            table {
+                font-size: 0.78rem;
+            }
+
+            .tier-label {
+                min-width: 60px;
+                font-size: 0.65rem;
+            }
+
+            .tier-fill {
+                font-size: 0.6rem;
+                height: 26px;
+            }
+        }
+
+        /* ── Interactive controls (added for Local LLM series) ── */
+        .control-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .control-row label {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            min-width: 180px;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 160px;
+            accent-color: var(--accent);
+        }
+        .control-row input[type="number"],
+        .control-row select {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
+        .control-row .val {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 80px;
+            text-align: right;
+        }
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.4rem 0.9rem;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .btn:hover { background: rgba(118, 185, 0, 0.2); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn.secondary {
+            background: var(--bg-code);
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+        .result-box {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+            padding: 0.75rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-top: 0.75rem;
+        }
+        .result-box .line-label { color: var(--text-secondary); }
+        .result-box .line-val   { color: var(--accent); font-weight: 600; }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .metric {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.6rem 0.8rem;
+            text-align: center;
+        }
+        .metric .metric-label {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .metric .metric-value {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            color: var(--accent);
+            font-weight: 600;
+            margin-top: 0.2rem;
+        }
+
+        /* Canvas / SVG containers */
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas,
+        .canvas-wrap svg {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
+        /* Small inline badge */
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">NVIDIA GPU Architectures Series — Presentation 08</div>
+    <h1><span class="accent">Ada Lovelace</span> &mdash; RTX 40, L40S, and Consumer-Class AI</h1>
+    <p class="subtitle">The 2022 architecture that gave gamers DLSS 3, gave workstation users the L40S as a cheap FP8 server card, and gave hobbyist AI a 24 GB RTX 4090 that runs Llama-class models locally &mdash; all on the same TSMC 4N process as the data-centre H100.</p>
+
+    <div class="tags">
+        <span class="tag">AD102</span><span class="tag">RTX 4090</span><span class="tag">RTX 5090 (no)</span>
+        <span class="tag">L40S</span><span class="tag">L4</span><span class="tag">RT cores 4</span>
+        <span class="tag">DLSS 3</span><span class="tag">OFA</span>
+        <span class="tag">FP8 (L40S)</span><span class="tag">GDDR6X</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">AD102</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">SM</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">4th-gen RT</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">4th-gen TC</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">DLSS 3</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">L40S</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">No NVLink</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <p>Ada Lovelace is two architectures wearing one label: a gaming flagship with new ray-tracing hardware and DLSS 3 frame generation, and a quietly aggressive datacenter inference card called the L40S. This deck walks both narratives.</p>
+    <ul class="contents-list">
+        <li><a href="#slide-01">Ada in One Page</a></li>
+        <li><a href="#slide-02">AD102 &mdash; The Die</a></li>
+        <li><a href="#slide-03">Ada SM &mdash; Inside a Streaming Multiprocessor</a></li>
+        <li><a href="#slide-04">4th-Gen RT Cores &mdash; OMM, DMM, SER</a></li>
+        <li><a href="#slide-05">DLSS 3 + Frame Generation</a></li>
+        <li><a href="#slide-06">RTX 40 Consumer Family</a></li>
+        <li><a href="#slide-07">L40S &mdash; The Sleeper Inference Card</a></li>
+        <li><a href="#slide-08">L40 / L4 / RTX 6000 Ada</a></li>
+        <li><a href="#slide-09">No NVLink &mdash; A Pivotal Decision</a></li>
+        <li><a href="#slide-10">Ada for LLMs &mdash; Where It Shines, Where It Doesn't</a></li>
+        <li><a href="#slide-11">Interactive: Ada SKU Picker</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>Ada in One Page</h2>
+    <p>Announced September 2022, shipped October 2022. The architecture name honours Ada Lovelace, the 19th-century English mathematician widely credited as the first programmer. Built on <strong>TSMC 4N</strong> &mdash; the same custom node as Hopper &mdash; it lifted transistor density enough to put 76 billion transistors on the flagship die.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Property</th><th>AD102 (top die)</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Process</td><td>TSMC 4N (custom 5 nm class)</td></tr>
+                <tr><td>Transistors</td><td>76.3 billion</td></tr>
+                <tr><td>Die size</td><td>608 mm&sup2;</td></tr>
+                <tr><td>SMs (full die)</td><td>144</td></tr>
+                <tr><td>SMs (RTX 4090)</td><td>128 enabled</td></tr>
+                <tr><td>SMs (RTX 6000 Ada / L40S)</td><td>full 144</td></tr>
+                <tr><td>L2 cache</td><td>96 MB (16&times; the RTX 3090)</td></tr>
+                <tr><td>Memory bus</td><td>384-bit GDDR6X (consumer) / GDDR6 ECC (datacenter)</td></tr>
+                <tr><td>NVLink</td><td>None on consumer; bridge only on RTX 6000 Ada</td></tr>
+                <tr><td>Released</td><td>October 2022</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Two parallel narratives in one architecture</h3>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Consumer / Gaming</h4>
+            <p>RTX 40-series, headlined by the <strong>RTX 4090</strong>. The story is 4th-generation RT cores, DLSS 3 with the new Optical Flow Accelerator, GDDR6X, and a giant 96 MB L2 designed for ray-tracing locality. <em>FP8 tensor-core path is fused off on consumer dies.</em></p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Workstation / Datacenter</h4>
+            <p><strong>L40S</strong>, L40, L4 and RTX 6000 Ada. Same silicon, ECC GDDR6, datacenter EULA-compliant cooling, and crucially the FP8 tensor-core path enabled. The L40S became NVIDIA's cheap FP8 inference card &mdash; less than half an H100's price for a meaningful slice of its inference throughput.</p>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Why it matters</div>
+        <p>Ada is the first architecture where a hobbyist could plausibly run a Llama-class model locally at decent speed (24 GB RTX 4090, GDDR6X &asymp; 1008 GB/s) and where a small company could stand up FP8 inference on commodity-priced datacenter cards (L40S). The same fabric, sold to two completely different markets, with one feature flag (FP8) deciding which bucket you fall into.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>AD102 &mdash; The Die</h2>
+    <p>AD102 is the largest Ada die. Two views &mdash; compute and memory &mdash; explain almost everything you need to know about the 4090 and the L40S.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Compute</h4>
+            <ul>
+                <li><strong>12 GPCs</strong> (Graphics Processing Clusters)</li>
+                <li><strong>12 SMs per GPC</strong> &rarr; 144 SMs full die</li>
+                <li><strong>RTX 4090</strong>: 128 SMs enabled (16 disabled for yield)</li>
+                <li><strong>RTX 6000 Ada / L40S</strong>: full 144 SMs</li>
+                <li>128 CUDA cores per SM &rarr; <strong>18 432 CUDA cores</strong> on full die; 16 384 on 4090</li>
+                <li>4 tensor cores per SM &rarr; <strong>576 4th-gen tensor cores</strong> full die</li>
+                <li>1 RT core per SM &rarr; <strong>144 4th-gen RT cores</strong> full die</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Memory</h4>
+            <ul>
+                <li><strong>384-bit GDDR6X bus</strong> on RTX 4090 (12 channels &times; 32-bit)</li>
+                <li>21 Gbps per pin &rarr; <strong>~1008 GB/s</strong> aggregate bandwidth</li>
+                <li>L40S uses GDDR6 ECC &rarr; ~864 GB/s at 48 GB</li>
+                <li><strong>96 MB L2 cache</strong> &mdash; 16&times; the 6 MB on the RTX 3090, designed for ray-tracing access locality and large attention windows</li>
+                <li><strong>No HBM</strong> on any Ada SKU &mdash; pure GDDR family</li>
+                <li><strong>No NVLink</strong> on any 40-series consumer card; bridge exists only on RTX 6000 Ada</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 240" width="720" height="240" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .die  { fill: #161b22; stroke: #30363d; }
+                .gpc  { fill: rgba(118,185,0,0.12); stroke: #76B900; }
+                .l2   { fill: rgba(210,168,255,0.18); stroke: #d2a8ff; }
+                .mem  { fill: rgba(255,166,87,0.18); stroke: #ffa657; }
+                .t    { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+                .tl   { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+                .h    { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+            </style>
+            <text x="10" y="18" class="h">AD102 floorplan &mdash; conceptual</text>
+            <rect x="10" y="30" width="700" height="190" class="die"/>
+            <!-- 12 GPCs in a 4x3 grid -->
+            <g>
+                <rect x="30"  y="50" width="140" height="55" class="gpc"/><text x="40"  y="80" class="t">GPC0 (12 SMs)</text>
+                <rect x="180" y="50" width="140" height="55" class="gpc"/><text x="190" y="80" class="t">GPC1 (12 SMs)</text>
+                <rect x="330" y="50" width="140" height="55" class="gpc"/><text x="340" y="80" class="t">GPC2 (12 SMs)</text>
+                <rect x="480" y="50" width="140" height="55" class="gpc"/><text x="490" y="80" class="t">GPC3 (12 SMs)</text>
+                <rect x="30"  y="115" width="140" height="35" class="l2"/><text x="40"  y="137" class="t">L2 slice 24 MB</text>
+                <rect x="180" y="115" width="140" height="35" class="l2"/><text x="190" y="137" class="t">L2 slice 24 MB</text>
+                <rect x="330" y="115" width="140" height="35" class="l2"/><text x="340" y="137" class="t">L2 slice 24 MB</text>
+                <rect x="480" y="115" width="140" height="35" class="l2"/><text x="490" y="137" class="t">L2 slice 24 MB</text>
+                <rect x="30"  y="160" width="140" height="50" class="gpc"/><text x="40"  y="190" class="t">GPC4..7 + GPC8..11</text>
+                <rect x="180" y="160" width="440" height="50" class="mem"/><text x="280" y="190" class="t">GDDR6X 384-bit, 21 Gbps &rarr; 1008 GB/s</text>
+            </g>
+            <text x="630" y="48" class="tl">96 MB L2 total</text>
+        </svg>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">The L2 explosion</div>
+        <p>Going from 6 MB on Ampere to 96 MB on Ada was the single biggest architectural change. With the previous L2, ray-tracing kernels and large fused-attention kernels were dominated by L2 misses out to GDDR. With 96 MB, an entire BVH stack <em>and</em> a working slice of the attention KV-cache can sit on-die, cutting effective bandwidth pressure dramatically.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Ada SM &mdash; Inside a Streaming Multiprocessor</h2>
+    <p>The Ada SM is structurally similar to GA10x (consumer Ampere) &mdash; same four-partition layout, same doubled-FP32 trick &mdash; but with newer tensor cores, newer RT core, and a much bigger L2 behind it.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Per-SM resources</h4>
+            <ul>
+                <li><strong>4 partitions</strong> per SM</li>
+                <li>Per partition: <strong>32 FP32 cores</strong> (consumer-doubled, like GA10x)</li>
+                <li>Per partition: <strong>16 INT32 cores</strong> (FP32-or-INT32 dual-issue)</li>
+                <li>Per partition: <strong>1 4th-gen tensor core</strong></li>
+                <li>Per SM: <strong>1 4th-gen RT core</strong></li>
+                <li>Per partition: 4 LD/ST units, 1 SFU (special-function)</li>
+                <li><strong>96 KB L1 / shared memory</strong> per SM (configurable split)</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Tensor core nuances</h4>
+            <ul>
+                <li>Per-SM <strong>tensor throughput parity with Hopper SMs</strong> on FP16/BF16 paths</li>
+                <li>But Ada has <em>fewer</em> SMs than H100 (144 max vs 132 Hopper SMs at higher clocks &rarr; H100 still wins absolute</li>
+                <li><strong>FP8 path is fused off on consumer dies</strong> &mdash; you cannot use the FP8 tensor cores on an RTX 4090</li>
+                <li>FP8 tensor cores enabled on <strong>L40S, L40, RTX 6000 Ada</strong> only</li>
+                <li>Sparsity (2:4) supported on all Ada SKUs</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 220" width="720" height="220" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .sm   { fill: #161b22; stroke: #30363d; }
+                .part { fill: rgba(118,185,0,0.10); stroke: #76B900; }
+                .fp   { fill: rgba(165,214,255,0.25); stroke: #a5d6ff; }
+                .tc   { fill: rgba(210,168,255,0.30); stroke: #d2a8ff; }
+                .rt   { fill: rgba(255,166,87,0.30); stroke: #ffa657; }
+                .mem  { fill: rgba(118,185,0,0.18); stroke: #76B900; }
+                .t    { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+                .h    { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+            </style>
+            <text x="10" y="18" class="h">Ada SM &mdash; 4 partitions + shared L1 + 1 RT core</text>
+            <rect x="10" y="30" width="700" height="170" class="sm"/>
+            <!-- 4 partitions across -->
+            <g>
+                <rect x="20"  y="40" width="160" height="120" class="part"/>
+                <text x="30"  y="55" class="t">Partition 0</text>
+                <rect x="30"  y="62" width="60" height="20" class="fp"/><text x="36" y="76" class="t">32 FP32</text>
+                <rect x="95"  y="62" width="55" height="20" class="fp"/><text x="100" y="76" class="t">16 INT32</text>
+                <rect x="30"  y="86" width="120" height="20" class="tc"/><text x="36" y="100" class="t">4th-gen Tensor</text>
+                <rect x="30"  y="110" width="120" height="18" class="part"/><text x="36" y="123" class="t">4 LD/ST + 1 SFU</text>
+                <text x="30"  y="148" class="t">warp sched + reg file</text>
+
+                <rect x="190" y="40" width="160" height="120" class="part"/>
+                <text x="200" y="55" class="t">Partition 1</text>
+                <rect x="200" y="62" width="60" height="20" class="fp"/><text x="206" y="76" class="t">32 FP32</text>
+                <rect x="265" y="62" width="55" height="20" class="fp"/><text x="270" y="76" class="t">16 INT32</text>
+                <rect x="200" y="86" width="120" height="20" class="tc"/><text x="206" y="100" class="t">4th-gen Tensor</text>
+
+                <rect x="360" y="40" width="160" height="120" class="part"/>
+                <text x="370" y="55" class="t">Partition 2</text>
+                <rect x="370" y="62" width="60" height="20" class="fp"/><text x="376" y="76" class="t">32 FP32</text>
+                <rect x="435" y="62" width="55" height="20" class="fp"/><text x="440" y="76" class="t">16 INT32</text>
+                <rect x="370" y="86" width="120" height="20" class="tc"/><text x="376" y="100" class="t">4th-gen Tensor</text>
+
+                <rect x="530" y="40" width="160" height="120" class="part"/>
+                <text x="540" y="55" class="t">Partition 3</text>
+                <rect x="540" y="62" width="60" height="20" class="fp"/><text x="546" y="76" class="t">32 FP32</text>
+                <rect x="605" y="62" width="55" height="20" class="fp"/><text x="610" y="76" class="t">16 INT32</text>
+                <rect x="540" y="86" width="120" height="20" class="tc"/><text x="546" y="100" class="t">4th-gen Tensor</text>
+
+                <!-- bottom shared row -->
+                <rect x="20"  y="170" width="500" height="22" class="mem"/><text x="30" y="185" class="t">96 KB L1 / shared (configurable split)</text>
+                <rect x="530" y="170" width="160" height="22" class="rt"/><text x="540" y="185" class="t">1 4th-gen RT core</text>
+            </g>
+        </svg>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Practical: doubled FP32, halved INT32</div>
+        <p>Like GA10x before it, Ada inherited the trick where one of the two 32-wide datapaths per partition can do FP32 <em>or</em> INT32 each cycle. Mixed integer-heavy workloads run at half rate; FP-heavy graphics workloads run at the headline 128 FP32 per SM. Pure ML matmul lives in the tensor cores, so this matters mainly for graphics shaders and CUDA scalar code.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>4th-Gen RT Cores &mdash; OMM, DMM, SER</h2>
+    <p>Ada's RT cores are the third major step (after Turing's first generation and Ampere's second/third). The headline number is roughly <strong>2&times; ray-triangle throughput vs Ampere</strong> per SM, but the more interesting changes are two new BVH primitives that change <em>what</em> the RT core processes, not just <em>how fast</em>.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>(a) Opacity Micromaps (OMM)</h4>
+            <p>Foliage, hair, fences, chain-link &mdash; geometry that is mostly transparent. Pre-Ada, every ray hitting the bounding triangle had to invoke the alpha-test shader to decide whether the hit was real.</p>
+            <p>OMMs <strong>encode the alpha mask of each triangle directly inside the BVH</strong>, at sub-triangle resolution. The RT core can resolve "ray missed the opaque part" without ever calling a shader &mdash; eliminating millions of redundant shader invocations per frame.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>(b) Displaced Micro-Meshes (DMM)</h4>
+            <p>A single triangle plus a displacement map encodes <strong>millions of micro-triangles</strong> that the RT core can ray-trace directly &mdash; without the BVH containing every micro-triangle explicitly.</p>
+            <p>This is a 10&times;+ memory reduction for highly detailed geometry (terrain, bricks, foliage), and it lets the RT core trace much higher-poly scenes than the BVH could otherwise hold in VRAM.</p>
+        </div>
+    </div>
+
+    <h3>SER &mdash; Shader Execution Reordering</h3>
+    <p>A separate, important addition. After divergent ray hits, the warp partitions out into many different shader paths &mdash; murderous for SIMT efficiency. SER is a software-controlled hint that lets the application <em>reorder</em> threads inside a warp so that threads taking the same shader path are grouped together. Effectively a programmable coherence sort. Big wins in path-traced engines (Cyberpunk's Overdrive mode reported up to 25% from SER alone).</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 200" width="720" height="200" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .lbl{ fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .b1 { fill: rgba(165,214,255,0.45); stroke: #a5d6ff; }
+                .b2 { fill: rgba(118,185,0,0.55); stroke: #76B900; }
+                .v  { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }
+                .h  { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+                .axis{ stroke: #21262d; }
+            </style>
+            <text x="10" y="18" class="h">RT throughput &mdash; relative, per SM (rays/s, normalised)</text>
+            <line x1="160" y1="30" x2="160" y2="190" class="axis"/>
+            <line x1="160" y1="190" x2="700" y2="190" class="axis"/>
+            <text x="155" y="50"  class="lbl" text-anchor="end">Turing (1st)</text>
+            <rect x="160" y="40"  width="80"  height="18" class="b1"/><text x="250" y="54" class="v">1.0&times;</text>
+            <text x="155" y="80"  class="lbl" text-anchor="end">Ampere (2nd)</text>
+            <rect x="160" y="70"  width="160" height="18" class="b1"/><text x="330" y="84" class="v">~2&times;</text>
+            <text x="155" y="110" class="lbl" text-anchor="end">Ada (4th)</text>
+            <rect x="160" y="100" width="320" height="18" class="b2"/><text x="490" y="114" class="v">~4&times; (incl. OMM/DMM)</text>
+            <text x="155" y="140" class="lbl" text-anchor="end">+SER (Cyberpunk OD)</text>
+            <rect x="160" y="130" width="400" height="18" class="b2"/><text x="570" y="144" class="v">~5&times; effective</text>
+            <text x="170" y="180" class="lbl">Note: real games depend heavily on BVH layout and shader divergence.</text>
+        </svg>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>DLSS 3 + Frame Generation</h2>
+    <p>DLSS 3 is the marquee Ada feature on the consumer side, and it is fundamentally different from DLSS 2. DLSS 2 was super-sampling: render at low resolution, upscale with a tensor-core neural network. DLSS 3 adds a second mechanism on top &mdash; <strong>Frame Generation</strong> &mdash; that synthesises wholly new in-between frames.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>The Optical Flow Accelerator (OFA)</h4>
+            <p>A dedicated hardware unit on Ada that computes <strong>optical flow vectors</strong> between two real rendered frames &mdash; per-pixel motion estimates including for objects without motion vectors (transparent particles, shadows, UI).</p>
+            <p>OFA exists on Ampere too, but Ada's OFA is roughly <strong>2.5&times; faster</strong> &mdash; enough to run inside a single frame budget at 60+ Hz.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Frame Generation pipeline</h4>
+            <ul>
+                <li>Render frame N and N+1 normally (with DLSS 2 upscaling)</li>
+                <li>OFA produces a flow field N&rarr;N+1</li>
+                <li>A small NN on the tensor cores fuses flow + game motion vectors + depth + colour to <em>synthesise</em> an intermediate frame</li>
+                <li>Display sequence: N &rarr; synthesised &rarr; N+1 &rarr; ...</li>
+                <li>Effective frame rate <strong>doubles</strong>; rendered work nearly the same</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>The latency tradeoff</h3>
+    <p>Frame Generation buys frame-rate, not responsiveness. Because the synthesised frame is <em>between</em> two real frames, the engine must hold N+1 briefly before showing it &mdash; net latency is similar to <em>not</em> using FG at the lower base rate. DLSS 3 is paired with NVIDIA Reflex (low-latency mode) to claw back some of that. Practical impact: great for cinematic / single-player, less attractive for competitive shooters.</p>
+
+    <h3>DLSS 3.5 &mdash; Ray Reconstruction</h3>
+    <p>Released 2023. Replaces hand-tuned ray-tracing denoisers (which historically blurred reflections and crawled at object edges) with a tensor-core neural network trained to reconstruct the noisy ray-traced image directly. Requires a path-traced renderer to shine; Cyberpunk Overdrive and Alan Wake 2 were the canonical demonstrations.</p>
+
+    <div class="callout">
+        <div class="callout-label">DLSS 3 is Ada-only by feature gate, not capability</div>
+        <p>NVIDIA gates Frame Generation to Ada because of OFA throughput. Ampere has the <em>units</em> but not the speed. Whether that is genuinely a hardware limit or a marketing line has been debated; benchmarks show Ampere's OFA is meaningfully slower, but a software-only fallback would not be impossible. As of 2026 the gate remains.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>RTX 40 Consumer Family</h2>
+    <p>The full launched and "Super" stack as it stood through 2024&ndash;2025, before Blackwell consumer cards arrived. The 4090 dominates absolute performance; the 4070 Ti Super and 4080 Super occupy the mid-tier; the 4060 / 4060 Ti are the budget end with notably narrow memory buses.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>SKU</th><th>CUDA cores</th><th>VRAM</th><th>BW (GB/s)</th><th>TDP</th><th>NVLink</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>RTX 4090</strong></td><td>16 384</td><td>24 GB GDDR6X</td><td>1008</td><td>450 W</td><td>none</td></tr>
+                <tr><td><strong>RTX 4080 Super</strong></td><td>10 240</td><td>16 GB GDDR6X</td><td>736</td><td>320 W</td><td>none</td></tr>
+                <tr><td><strong>RTX 4070 Ti Super</strong></td><td>8 448</td><td>16 GB GDDR6X</td><td>672</td><td>285 W</td><td>none</td></tr>
+                <tr><td><strong>RTX 4070</strong></td><td>5 888</td><td>12 GB GDDR6X</td><td>504</td><td>200 W</td><td>none</td></tr>
+                <tr><td><strong>RTX 4060</strong></td><td>3 072</td><td>8 GB GDDR6</td><td>272</td><td>115 W</td><td>none</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">No NVLink on any RTX 40</div>
+        <p>The bridge connector was physically removed from the PCB. Multi-GPU with two RTX 4090s is therefore PCIe-only &mdash; PCIe 4 x16 P2P at ~32 GB/s vs the 600+ GB/s of NVLink 3 on the previous A6000 bridge. This is the single biggest blocker for tensor-parallel inference on consumer Ada and the reason the L40S and RTX 6000 Ada exist as separate products.</p>
+    </div>
+
+    <h3>The 4090 specifically</h3>
+    <ul>
+        <li>128 of 144 SMs enabled (16 384 of 18 432 CUDA cores)</li>
+        <li>24 GB GDDR6X over 384-bit bus &rarr; 1008 GB/s</li>
+        <li>72 MB of L2 enabled (out of 96 MB on full die)</li>
+        <li>2.52 GHz boost; routinely overclocks past 2.8 GHz on good silicon</li>
+        <li>~83 TFLOPS FP32; ~330 TFLOPS BF16 tensor (dense)</li>
+        <li>Single 16-pin 12VHPWR connector, 450 W TDP, 600 W cable rating</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">VRAM was the killer feature</div>
+        <p>For local AI hobbyists in 2023&ndash;2024 the 4090 was extraordinary not because of raw FLOPS (the 3090 was already enough for many tasks) but because <strong>24 GB on a single consumer GPU at 1008 GB/s</strong> was something no other card at that price point offered. It put 13B-class models comfortably into BF16 and 70B-class models into INT4 reach.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>L40S &mdash; The Sleeper Inference Card</h2>
+    <p>The L40S is the most under-appreciated card NVIDIA shipped during the Ada generation, and it became one of the most popular datacenter GPUs in 2024&ndash;2026 for cost-optimised LLM serving where bandwidth is not the bottleneck.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Property</th><th>L40S</th></tr></thead>
+            <tbody>
+                <tr><td>Die</td><td>AD102 <strong>full die</strong> (all 144 SMs)</td></tr>
+                <tr><td>CUDA cores</td><td>18 176</td></tr>
+                <tr><td>Tensor cores</td><td>568 (4th-gen)</td></tr>
+                <tr><td>RT cores</td><td>142 (4th-gen)</td></tr>
+                <tr><td><strong>FP8 tensor path</strong></td><td><strong>enabled</strong> &mdash; the key differentiator</td></tr>
+                <tr><td>VRAM</td><td>48 GB GDDR6 with ECC</td></tr>
+                <tr><td>Bandwidth</td><td>~864 GB/s</td></tr>
+                <tr><td>TDP</td><td>350 W, passive cooling, datacenter form factor</td></tr>
+                <tr><td>NVLink</td><td>none</td></tr>
+                <tr><td>Datacenter EULA</td><td>compliant (unlike RTX 4090)</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Why it became the sleeper hit</h3>
+    <ul>
+        <li><strong>FP8 native</strong> on a GDDR-class card &mdash; same dtype as the H100, so any FP8 checkpoint runs at full speed on the tensor cores</li>
+        <li><strong>48 GB</strong> &mdash; fits Llama-70B-FP8 (~70 GB across two cards) or Llama-3-8B-FP8 with very large KV pools on one</li>
+        <li><strong>~half the price of an H100</strong> at launch; closer to a third by 2025</li>
+        <li><strong>Datacenter-licensed and passive</strong> &mdash; drops into existing 2U servers without warranty issues, unlike a 4090 with its consumer EULA and active cooler</li>
+        <li><strong>No HBM</strong> &mdash; bandwidth (~864 GB/s) is the obvious downside vs H100's 3.4 TB/s, but for many inference workloads (especially batched serving or compute-bound prefill) the gap matters far less than the price</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Where the L40S beats the H100 on cost-per-token</div>
+        <p>Compute-bound prefill of long prompts; small-model batched inference where you stream concurrent requests; vector embedding services; vision encoders. Anywhere bandwidth-per-token is not the limit, the L40S buys you most of an H100's behaviour for half the money. <strong>Where it loses</strong>: long-context single-stream decode (bandwidth-bound), training (FP32 / FP64 paths much thinner), multi-GPU TP (no NVLink).</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>L40 / L4 / RTX 6000 Ada</h2>
+    <p>Three more workstation/datacenter Ada SKUs round out the family. They share the same AD102 / AD104 silicon but target very different deployment envelopes.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>SKU</th><th>VRAM</th><th>BW (GB/s)</th><th>TDP</th><th>FP8</th><th>NVLink</th><th>Niche</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>L40</strong></td><td>48 GB GDDR6 ECC</td><td>~864</td><td>300 W</td><td><span class="badge bad">no</span></td><td>none</td><td>Pre-L40S graphics+inference card; superseded.</td></tr>
+                <tr><td><strong>L40S</strong></td><td>48 GB GDDR6 ECC</td><td>~864</td><td>350 W</td><td><span class="badge ok">yes</span></td><td>none</td><td>Cheap FP8 inference (slide 07).</td></tr>
+                <tr><td><strong>L4</strong></td><td>24 GB GDDR6</td><td>300</td><td><strong>72 W</strong> single-slot</td><td><span class="badge bad">no</span></td><td>none</td><td>Video transcoding + edge inference.</td></tr>
+                <tr><td><strong>RTX 6000 Ada</strong></td><td>48 GB GDDR6 ECC</td><td>960</td><td>300 W</td><td><span class="badge bad">no</span></td><td><strong>bridge</strong></td><td>Workstation; the only Ada with NVLink.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>Each card's actual job</h3>
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>L40</h4>
+            <p>The original "graphics + inference" Ada datacenter card. 48 GB ECC, 300 W. Once the L40S (same form factor + FP8) launched, the L40 was effectively superseded for inference workloads and is now found mostly in deployed VDI / virtual workstation farms.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>L4</h4>
+            <p><strong>72 W single-slot</strong> low-profile card. Designed for video transcoding farms (NVENC / NVDEC) and edge inference. 24 GB GDDR6, 300 GB/s &mdash; bandwidth is modest but the power and form-factor envelope are unmatched. Drops into 1U servers and dense edge appliances.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>RTX 6000 Ada</h4>
+            <p>The workstation flagship. AD102 with full SM count, 48 GB GDDR6 ECC, ~960 GB/s, 300 W, blower cooler. <strong>NVLink bridge optional</strong> &mdash; the <em>only</em> Ada SKU that supports NVLink, and only for two-card pairs. The card to buy if you need 96 GB across two GPUs with proper TP scaling.</p>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Why no FP8 on RTX 6000 Ada?</div>
+        <p>It's a market-segmentation choice rather than a silicon one. The RTX 6000 Ada uses the same AD102 die as the L40S; the FP8 fuse setting differs. NVIDIA positioned the L40S as the FP8 datacenter card and the RTX 6000 Ada as the workstation+visualisation card, even though the silicon is interchangeable. Buyers in 2024&ndash;2025 routinely picked L40S for AI work and RTX 6000 Ada for content/CAD/sim work for this reason.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>No NVLink &mdash; A Pivotal Decision</h2>
+    <p>Of all the design choices in Ada, removing NVLink from the consumer cards had the most far-reaching consequence for the local AI community. The 3090 had an NVLink bridge; every 40-series card lost it. The reason matters and the implications cascade.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>What NVIDIA removed</h4>
+            <p>The dual gold-fingers along the top edge of the 3090 PCB &mdash; physically gone. No Ada consumer card has the connector. The driver still understands NVLink (datacenter Ada cards use it), but no consumer SKU exposes it.</p>
+            <p>Plausibly motivated to push pro/datacenter buyers towards the L40S and RTX 6000 Ada rather than two 4090s.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>The throughput cost on TP=2</h4>
+            <ul>
+                <li><strong>NVLink 3 bridge</strong> on 3090/A6000: ~112 GB/s aggregate, two-card</li>
+                <li><strong>PCIe 4 x16 P2P</strong> on 4090: ~32 GB/s peak, often less in practice (root-complex topology dependent)</li>
+                <li>TP=2 scaling on Llama-70B: <strong>~1.9&times;</strong> with NVLink, <strong>~1.3&ndash;1.5&times;</strong> with PCIe 4 P2P alone</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Two RTX 4090s vs one RTX 6000 Ada</h3>
+    <p>This was the question every serious local-AI builder asked in 2023&ndash;2024. The architectures are identical (AD102), so it comes down to memory and link:</p>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Option</th><th>VRAM</th><th>BW (GB/s)</th><th>TP scaling</th><th>Power</th><th>Verdict</th></tr></thead>
+            <tbody>
+                <tr><td>2 &times; RTX 4090</td><td>48 GB total (24+24)</td><td>1008 each</td><td>~1.3&ndash;1.5&times; over PCIe 4</td><td>900 W combined</td><td>Higher peak BW, painful TP scaling, no datacenter licence.</td></tr>
+                <tr><td>1 &times; RTX 6000 Ada</td><td>48 GB on one card</td><td>960</td><td>n/a (single GPU)</td><td>300 W</td><td>Same VRAM in one address space &mdash; no link tax, lower power, ECC, datacenter-licensed.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p>For any TP-aware workload (vLLM TP=2 of a 70B-class model), the RTX 6000 Ada wins comfortably despite identical underlying silicon. For two-replica DP-style serving (one model per card behind a load balancer), the 4090 pair wins on raw aggregate bandwidth and absolute throughput.</p>
+
+    <div class="callout">
+        <div class="callout-label">Successor preview</div>
+        <p>Blackwell partly relented: the <strong>RTX PRO 6000 Blackwell</strong> brings back the NVLink bridge with 96 GB GDDR7 on a single card, which sidesteps the question for many buyers. Consumer Blackwell (RTX 50-series) reportedly continues to have <em>no</em> NVLink bridge. Deck 09 covers Blackwell.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>Ada for LLMs &mdash; Where It Shines, Where It Doesn't</h2>
+    <p>A frank assessment, two years after launch. Ada is two architectures &mdash; the consumer line is a single-GPU local-AI machine, and the L40S is a cheap datacenter inference card. Each excels at different things.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Where Ada shines</h4>
+            <ul>
+                <li><strong>Single-GPU consumer inference</strong> &mdash; 24 GB on a 4090 fits 13B BF16 / 32B INT4 cleanly</li>
+                <li><strong>Cheap FP8 inference</strong> &mdash; L40S at half H100 price, datacenter-licensed</li>
+                <li><strong>Vector search / RAG</strong> &mdash; bandwidth (1008 GB/s) is plenty for embedding retrieval</li>
+                <li><strong>Video / vision pipelines</strong> &mdash; NVENC/NVDEC and FP8 on L40S are excellent</li>
+                <li><strong>Hobbyist fine-tuning</strong> &mdash; LoRA on 7&ndash;13B models on a single 4090 is now routine</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Where Ada falls short</h4>
+            <ul>
+                <li><strong>Multi-GPU TP</strong> &mdash; no NVLink on consumer cards, painful PCIe scaling</li>
+                <li><strong>Pretraining</strong> &mdash; no FP8 on RTX 40, only L40S; no NVSwitch fabric</li>
+                <li><strong>HPC FP64</strong> &mdash; very thin (Ada is graphics-first)</li>
+                <li><strong>Largest models</strong> &mdash; 70B-FP8 needs 2&times; L40S over PCIe; H100 SXM still better there</li>
+                <li><strong>Long-context decode</strong> &mdash; bandwidth is the limit; HBM3 cards win on tok/s</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>Worked numbers &mdash; what you actually get</h3>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Model / quant</th><th>Hardware</th><th>Throughput</th></tr></thead>
+            <tbody>
+                <tr><td>Llama-3-8B BF16</td><td>1 &times; RTX 4090</td><td>~75 tok/s/stream &middot; batched ~3000 tok/s aggregate</td></tr>
+                <tr><td>Llama-3-70B AWQ-INT4</td><td>2 &times; RTX 4090, PCIe TP=2</td><td>~22 tok/s/stream</td></tr>
+                <tr><td>Llama-3-70B FP8</td><td>2 &times; L40S, PCIe TP=2</td><td>~30 tok/s/stream &middot; batched ~600 tok/s</td></tr>
+                <tr><td>Llama-3-8B FP8</td><td>1 &times; L40S</td><td>~95 tok/s/stream &middot; batched ~4500 tok/s</td></tr>
+                <tr><td>SDXL image, 30 steps</td><td>1 &times; RTX 4090</td><td>~3.5 s per 1024&times;1024 image</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Honest bottom line</div>
+        <p>If your workload is single-stream decode of a model that fits in 24&ndash;48 GB, Ada is the best price/performance NVIDIA offers from 2022&ndash;2026. If you need to span 70B+ with tensor parallelism, the lack of NVLink hurts and you should look at H100/H200 (Hopper deck) or RTX PRO 6000 Blackwell (Blackwell deck) instead.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-11">
+    <div class="slide-number">11</div>
+    <h2>Interactive: Ada SKU Picker</h2>
+    <p>Pick an Ada-generation SKU. The panel summarises capability, deployment licence, multi-GPU prospects, and the largest LLM you can comfortably host at FP16 vs INT4.</p>
+
+    <div class="control-panel">
+        <div class="control-row">
+            <label for="ada-sku">Ada SKU</label>
+            <select id="ada-sku">
+                <option value="4060">RTX 4060 (8 GB GDDR6 &middot; 272 GB/s &middot; 115 W)</option>
+                <option value="4070">RTX 4070 (12 GB GDDR6X &middot; 504 GB/s &middot; 200 W)</option>
+                <option value="4070ti">RTX 4070 Ti Super (16 GB GDDR6X &middot; 672 GB/s &middot; 285 W)</option>
+                <option value="4080">RTX 4080 Super (16 GB GDDR6X &middot; 736 GB/s &middot; 320 W)</option>
+                <option value="4090" selected>RTX 4090 (24 GB GDDR6X &middot; 1008 GB/s &middot; 450 W)</option>
+                <option value="rtx6000">RTX 6000 Ada (48 GB GDDR6 ECC &middot; 960 GB/s &middot; 300 W)</option>
+                <option value="l4">L4 (24 GB GDDR6 &middot; 300 GB/s &middot; 72 W)</option>
+                <option value="l40">L40 (48 GB GDDR6 ECC &middot; 864 GB/s &middot; 300 W)</option>
+                <option value="l40s">L40S (48 GB GDDR6 ECC &middot; 864 GB/s &middot; 350 W)</option>
+            </select>
+        </div>
+        <div class="metric-grid">
+            <div class="metric"><div class="metric-label">VRAM</div><div class="metric-value" id="m-vram">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">BW (GB/s)</div><div class="metric-value" id="m-bw">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">TDP (W)</div><div class="metric-value" id="m-tdp">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">FP8</div><div class="metric-value" id="m-fp8">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">NVLink</div><div class="metric-value" id="m-nvl">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">ECC</div><div class="metric-value" id="m-ecc">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Datacenter licence</div><div class="metric-value" id="m-dc">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Largest LLM (FP16 / INT4)</div><div class="metric-value" id="m-llm">&mdash;</div></div>
+        </div>
+        <div id="ada-out" class="result-box"></div>
+    </div>
+
+    <script>
+    (function(){
+        const skus = {
+            '4060':    { name:'RTX 4060',            vram: 8, bw: 272,  tdp:115, fp8:false, nvlink:'none',   ecc:false, dc:false, role:'budget local; 7B INT4 fits comfortably; single-user only.' },
+            '4070':    { name:'RTX 4070',            vram:12, bw: 504,  tdp:200, fp8:false, nvlink:'none',   ecc:false, dc:false, role:'mainstream local; 7&ndash;13B INT4; single-stream LLM use.' },
+            '4070ti':  { name:'RTX 4070 Ti Super',   vram:16, bw: 672,  tdp:285, fp8:false, nvlink:'none',   ecc:false, dc:false, role:'13B BF16 or 32B INT4; good single-GPU sweet spot.' },
+            '4080':    { name:'RTX 4080 Super',      vram:16, bw: 736,  tdp:320, fp8:false, nvlink:'none',   ecc:false, dc:false, role:'similar to 4070 Ti Super; slightly higher BW.' },
+            '4090':    { name:'RTX 4090',            vram:24, bw:1008,  tdp:450, fp8:false, nvlink:'none',   ecc:false, dc:false, role:'consumer flagship; 13B BF16, 32B INT4, 70B INT4 with KV pressure.' },
+            'rtx6000': { name:'RTX 6000 Ada',        vram:48, bw: 960,  tdp:300, fp8:false, nvlink:'bridge', ecc:true,  dc:true,  role:'workstation flagship; 48 GB ECC, optional NVLink bridge for 2-card TP.' },
+            'l4':      { name:'L4',                  vram:24, bw: 300,  tdp: 72, fp8:false, nvlink:'none',   ecc:true,  dc:true,  role:'72 W single-slot edge / video transcoding card; modest BW.' },
+            'l40':     { name:'L40',                 vram:48, bw: 864,  tdp:300, fp8:false, nvlink:'none',   ecc:true,  dc:true,  role:'pre-L40S graphics+inference; superseded for AI by L40S.' },
+            'l40s':    { name:'L40S',                vram:48, bw: 864,  tdp:350, fp8:true,  nvlink:'none',   ecc:true,  dc:true,  role:'cheap FP8 inference; 70B-FP8 across two cards over PCIe.' }
+        };
+
+        function badge(ok, text) {
+            return '<span class="badge ' + (ok ? 'ok' : 'bad') + '">' + text + '</span>';
+        }
+        function nvlinkLabel(v) {
+            if (v === 'bridge') return 'bridge';
+            return 'none';
+        }
+
+        function rec(){
+            const k = document.getElementById('ada-sku').value;
+            const s = skus[k];
+            // Largest LLM rough heuristic
+            // FP16: each B param = 2 GB; allow ~70% for KV/runtime
+            // INT4: each B param = 0.6 GB
+            const fp16B = Math.floor((s.vram * 0.70) / 2);
+            const int4B = Math.floor((s.vram * 0.80) / 0.6);
+
+            document.getElementById('m-vram').textContent = s.vram + ' GB';
+            document.getElementById('m-bw').textContent   = s.bw;
+            document.getElementById('m-tdp').textContent  = s.tdp + ' W';
+            document.getElementById('m-fp8').innerHTML    = s.fp8 ? badge(true,'yes') : badge(false,'no');
+            document.getElementById('m-nvl').textContent  = nvlinkLabel(s.nvlink);
+            document.getElementById('m-ecc').textContent  = s.ecc ? 'Y' : 'N';
+            document.getElementById('m-dc').textContent   = s.dc ? 'Y' : 'N';
+            document.getElementById('m-llm').textContent  = '~' + fp16B + 'B / ~' + int4B + 'B';
+
+            const recs = [];
+            if (s.fp8)            recs.push('<span class="badge ok">FP8 native</span> use FP8 weights + FP8 KV for max efficiency.');
+            else                  recs.push('<span class="badge bad">no FP8</span> prefer AWQ-INT4 or GPTQ; FP8 is fused off on this die.');
+            if (s.nvlink === 'bridge') recs.push('<span class="badge warn">NVLink bridge</span> 2-card TP works well; more than 2 cards is server-board only.');
+            else                  recs.push('<span class="badge warn">no NVLink</span> multi-GPU is PCIe P2P only &mdash; expect TP scaling 1.3&ndash;1.5&times; max.');
+            if (!s.dc)            recs.push('<span class="badge warn">consumer EULA</span> not licensed for commercial datacenter deployment.');
+            if (s.tdp <= 75)      recs.push('<span class="badge ok">low-power</span> 1U / single-slot deployment is feasible.');
+            if (s.vram >= 48 && s.fp8)
+                recs.push('<span class="badge ok">70B-FP8 capable</span> across two of these cards over PCIe.');
+
+            document.getElementById('ada-out').innerHTML =
+                '<div><span class="line-label">role</span> &rarr; <span class="line-val">' + s.role + '</span></div>' +
+                '<div style="margin-top:0.5rem;color:var(--text-secondary);">' +
+                recs.map(r => '&bull; ' + r).join('<br>') + '</div>';
+        }
+        document.getElementById('ada-sku').addEventListener('change', rec);
+        rec();
+    })();
+    </script>
+
+    <div class="callout">
+        <div class="callout-label">How to read the picker</div>
+        <p>"Largest LLM" is a rough envelope: FP16 assumes ~70% of VRAM goes to weights and the rest to KV/runtime; INT4 assumes ~80%. In practice context length, batch size, and KV-cache dtype shift these by ~20% either way. Use this to filter out impossible matches, not as a precise spec.</p>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════ Footer ════════════════════════════════════ -->
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLMs#nvidia-gpu-architectures">NVIDIA GPU Architectures Series</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLMs#nvidia-gpu-architectures">Back to Series Index</a></p>
+</footer>
+
+<script>
+    // Smooth scroll for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // Subtle fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+
+</body>
+</html>
