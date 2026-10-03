@@ -824,7 +824,7 @@
                 <tr><td>SMs (RTX 6000 Ada / L40S)</td><td>142 enabled</td></tr>
                 <tr><td>L2 cache</td><td>96 MB (16&times; the RTX 3090)</td></tr>
                 <tr><td>Memory bus</td><td>384-bit GDDR6X (consumer) / GDDR6 ECC (datacenter)</td></tr>
-                <tr><td>NVLink</td><td>None on consumer; bridge only on RTX 6000 Ada</td></tr>
+                <tr><td>NVLink</td><td>None on any Ada SKU (consumer, RTX 6000 Ada or L-series)</td></tr>
                 <tr><td>Released</td><td>October 2022</td></tr>
             </tbody>
         </table>
@@ -874,7 +874,7 @@
                 <li>L40S uses GDDR6 ECC &rarr; ~864 GB/s at 48 GB</li>
                 <li><strong>96 MB L2 cache</strong> &mdash; 16&times; the 6 MB on the RTX 3090, designed for ray-tracing access locality and large attention windows</li>
                 <li><strong>No HBM</strong> on any Ada SKU &mdash; pure GDDR family</li>
-                <li><strong>No NVLink</strong> on any 40-series consumer card; bridge exists only on RTX 6000 Ada</li>
+                <li><strong>No NVLink</strong> on any 40-series consumer card, nor on RTX 6000 Ada or the L-series</li>
             </ul>
         </div>
     </div>
@@ -930,13 +930,13 @@
                 <li>Per partition: <strong>1 4th-gen tensor core</strong></li>
                 <li>Per SM: <strong>1 3rd-gen RT core</strong></li>
                 <li>Per partition: 4 LD/ST units, 1 SFU (special-function)</li>
-                <li><strong>96 KB L1 / shared memory</strong> per SM (configurable split)</li>
+                <li><strong>128 KB L1 / shared memory</strong> per SM (configurable split)</li>
             </ul>
         </div>
         <div class="diagram-panel accent-border">
             <h4>Tensor core nuances</h4>
             <ul>
-                <li>Per-SM <strong>tensor throughput parity with Hopper SMs</strong> on FP16/BF16 paths</li>
+                <li>Per-SM FP16/BF16 tensor throughput is <strong>about a quarter of a Hopper SM's</strong> per clock (1024 vs 4096 FLOP/clk dense)</li>
                 <li>Ada has <em>more</em> SMs on the full die than H100 (144 vs 132), but H100 wins absolute on bandwidth, NVLink, and Transformer Engine</li>
                 <li><strong>FP8 tensor cores are present on all Ada SKUs</strong> (RTX 4090 included) &mdash; same E4M3 / E5M2 formats as Hopper</li>
                 <li>What's missing on consumer Ada is the <strong>Transformer Engine</strong> (auto FP8 scaling) integration that Hopper has</li>
@@ -988,7 +988,7 @@
                 <rect x="540" y="86" width="120" height="20" class="tc"/><text x="546" y="100" class="t">4th-gen Tensor</text>
 
                 <!-- bottom shared row -->
-                <rect x="20"  y="170" width="500" height="22" class="mem"/><text x="30" y="185" class="t">96 KB L1 / shared (configurable split)</text>
+                <rect x="20"  y="170" width="500" height="22" class="mem"/><text x="30" y="185" class="t">128 KB L1 / shared (configurable split)</text>
                 <rect x="530" y="170" width="160" height="22" class="rt"/><text x="540" y="185" class="t">1 3rd-gen RT core</text>
             </g>
         </svg>
@@ -1113,13 +1113,13 @@
         <li>24 GB GDDR6X over 384-bit bus &rarr; 1008 GB/s</li>
         <li>72 MB of L2 enabled (out of 96 MB on full die)</li>
         <li>2.52 GHz boost; routinely overclocks past 2.8 GHz on good silicon</li>
-        <li>~83 TFLOPS FP32; ~330 TFLOPS BF16 tensor (dense)</li>
+        <li>~83 TFLOPS FP32; ~165 TFLOPS BF16 tensor (dense; 330 for FP16 with FP16 accumulate)</li>
         <li>Single 16-pin 12VHPWR connector, 450 W TDP, 600 W cable rating</li>
     </ul>
 
     <div class="callout">
         <div class="callout-label">VRAM was the killer feature</div>
-        <p>For local AI hobbyists in 2023&ndash;2024 the 4090 was extraordinary not because of raw FLOPS (the 3090 was already enough for many tasks) but because <strong>24 GB on a single consumer GPU at 1008 GB/s</strong> was something no other card at that price point offered. It put 13B-class models comfortably into BF16 and 70B-class models into INT4 reach.</p>
+        <p>For local AI hobbyists in 2023&ndash;2024 the 4090 was extraordinary not because of raw FLOPS (the 3090 was already enough for many tasks) but because <strong>24 GB on a single consumer GPU at 1008 GB/s</strong> was something no other card at that price point offered. It put 7&ndash;8B models comfortably into BF16 and 30B-class models into INT4 reach (13B BF16 is 26 GB and 70B INT4 ~40 GB, so both need two cards).</p>
     </div>
 </section>
 
@@ -1175,7 +1175,7 @@
                 <tr><td><strong>L40</strong></td><td>48 GB GDDR6 ECC</td><td>~864</td><td>300 W</td><td><span class="badge ok">yes</span></td><td>none</td><td>Pre-L40S graphics+inference card; superseded by L40S on perf.</td></tr>
                 <tr><td><strong>L40S</strong></td><td>48 GB GDDR6 ECC</td><td>~864</td><td>350 W</td><td><span class="badge ok">yes</span></td><td>none</td><td>Cheap FP8 inference (slide 07).</td></tr>
                 <tr><td><strong>L4</strong></td><td>24 GB GDDR6</td><td>300</td><td><strong>72 W</strong> single-slot</td><td><span class="badge ok">yes</span></td><td>none</td><td>Video transcoding + edge inference.</td></tr>
-                <tr><td><strong>RTX 6000 Ada</strong></td><td>48 GB GDDR6 ECC</td><td>960</td><td>300 W</td><td><span class="badge ok">yes</span></td><td><strong>bridge</strong></td><td>Workstation; the only Ada with NVLink.</td></tr>
+                <tr><td><strong>RTX 6000 Ada</strong></td><td>48 GB GDDR6 ECC</td><td>960</td><td>300 W</td><td><span class="badge ok">yes</span></td><td>none</td><td>Workstation flagship; ECC, pro drivers.</td></tr>
             </tbody>
         </table>
     </div>
@@ -1192,13 +1192,13 @@
         </div>
         <div class="diagram-panel accent-border">
             <h4>RTX 6000 Ada</h4>
-            <p>The workstation flagship. AD102 with 142 SMs (18,176 CUDA cores), 48 GB GDDR6 ECC, ~960 GB/s, 300 W, blower cooler. <strong>NVLink bridge optional</strong> &mdash; the <em>only</em> Ada SKU that supports NVLink, and only for two-card pairs. The card to buy if you need 96 GB across two GPUs with proper TP scaling.</p>
+            <p>The workstation flagship. AD102 with 142 SMs (18,176 CUDA cores), 48 GB GDDR6 ECC, ~960 GB/s, 300 W, blower cooler. No NVLink (RTX 6000 Ada datasheet: &ldquo;NVLink: No&rdquo;), so two-card setups run over PCIe like every other Ada part.</p>
         </div>
     </div>
 
     <div class="callout">
         <div class="callout-label">L40S vs RTX 6000 Ada &mdash; same silicon, different positioning</div>
-        <p>Both use AD102 with 142 of 144 SMs enabled and 4th-gen tensor cores (FP8 supported on both). The L40S has higher clocks, a higher 350 W TDP, and is tuned for AI throughput; the RTX 6000 Ada targets workstation graphics with an NVLink bridge for two-card pairs. Buyers in 2024&ndash;2025 routinely picked L40S for AI inference and RTX 6000 Ada for content/CAD/sim work that benefits from NVLink.</p>
+        <p>Both use AD102 with 142 of 144 SMs enabled and 4th-gen tensor cores (FP8 supported on both). The L40S has higher clocks, a higher 350 W TDP, and is tuned for AI throughput; the RTX 6000 Ada targets workstation graphics with pro drivers and active cooling. Buyers in 2024&ndash;2025 routinely picked L40S for AI inference and RTX 6000 Ada for content/CAD/sim work.</p>
     </div>
 </section>
 
@@ -1210,7 +1210,7 @@
     <div class="diagram-grid cols-2">
         <div class="diagram-panel accent-border">
             <h4>What NVIDIA removed</h4>
-            <p>The dual gold-fingers along the top edge of the 3090 PCB &mdash; physically gone. No Ada consumer card has the connector. The driver still understands NVLink (datacenter Ada cards use it), but no consumer SKU exposes it.</p>
+            <p>The dual gold-fingers along the top edge of the 3090 PCB &mdash; physically gone. No Ada consumer card has the connector. No Ada SKU at all &mdash; consumer, workstation or datacenter &mdash; exposes NVLink.</p>
             <p>Plausibly motivated to push pro/datacenter buyers towards the L40S and RTX 6000 Ada rather than two 4090s.</p>
         </div>
         <div class="diagram-panel accent-border">
@@ -1239,7 +1239,7 @@
 
     <div class="callout">
         <div class="callout-label">Successor preview</div>
-        <p>Blackwell partly relented: the <strong>RTX PRO 6000 Blackwell</strong> brings back the NVLink bridge with 96 GB GDDR7 on a single card, which sidesteps the question for many buyers. Consumer Blackwell (RTX 50-series) reportedly continues to have <em>no</em> NVLink bridge. Deck 09 covers Blackwell.</p>
+        <p>Blackwell partly relented: the <strong>RTX PRO 6000 Blackwell</strong> puts 96 GB GDDR7 on a single card (still without NVLink), which sidesteps the question for many buyers. Consumer Blackwell (RTX 50-series) reportedly continues to have <em>no</em> NVLink bridge. Deck 09 covers Blackwell.</p>
     </div>
 </section>
 
@@ -1252,7 +1252,7 @@
         <div class="diagram-panel accent-border">
             <h4>Where Ada shines</h4>
             <ul>
-                <li><strong>Single-GPU consumer inference</strong> &mdash; 24 GB on a 4090 fits 13B BF16 / 32B INT4 cleanly</li>
+                <li><strong>Single-GPU consumer inference</strong> &mdash; 24 GB on a 4090 fits 8B BF16 / 32B INT4 cleanly</li>
                 <li><strong>Cheap FP8 inference</strong> &mdash; L40S at half H100 price, datacenter-licensed</li>
                 <li><strong>Vector search / RAG</strong> &mdash; bandwidth (1008 GB/s) is plenty for embedding retrieval</li>
                 <li><strong>Video / vision pipelines</strong> &mdash; NVENC/NVDEC and FP8 on L40S are excellent</li>
@@ -1276,9 +1276,9 @@
         <table>
             <thead><tr><th>Model / quant</th><th>Hardware</th><th>Throughput</th></tr></thead>
             <tbody>
-                <tr><td>Llama-3-8B BF16</td><td>1 &times; RTX 4090</td><td>~75 tok/s/stream &middot; batched ~3000 tok/s aggregate</td></tr>
+                <tr><td>Llama-3-8B BF16</td><td>1 &times; RTX 4090</td><td>~55 tok/s/stream (ceiling 1008 &divide; 16 GB &asymp; 63) &middot; batched ~3000 tok/s aggregate</td></tr>
                 <tr><td>Llama-3-70B AWQ-INT4</td><td>2 &times; RTX 4090, PCIe TP=2</td><td>~22 tok/s/stream</td></tr>
-                <tr><td>Llama-3-70B FP8</td><td>2 &times; L40S, PCIe TP=2</td><td>~30 tok/s/stream &middot; batched ~600 tok/s</td></tr>
+                <tr><td>Llama-3-70B FP8</td><td>2 &times; L40S, PCIe TP=2</td><td>~20 tok/s/stream (ceiling 864 &divide; 35 GB per card &asymp; 25) &middot; batched ~600 tok/s</td></tr>
                 <tr><td>Llama-3-8B FP8</td><td>1 &times; L40S</td><td>~95 tok/s/stream &middot; batched ~4500 tok/s</td></tr>
                 <tr><td>SDXL image, 30 steps</td><td>1 &times; RTX 4090</td><td>~3.5 s per 1024&times;1024 image</td></tr>
             </tbody>
@@ -1329,10 +1329,10 @@
         const skus = {
             '4060':    { name:'RTX 4060',            vram: 8, bw: 272,  tdp:115, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'budget local; 7B INT4 fits comfortably; single-user only.' },
             '4070':    { name:'RTX 4070',            vram:12, bw: 504,  tdp:200, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'mainstream local; 7&ndash;13B INT4; single-stream LLM use.' },
-            '4070ti':  { name:'RTX 4070 Ti Super',   vram:16, bw: 672,  tdp:285, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'13B BF16 or 32B INT4; good single-GPU sweet spot.' },
+            '4070ti':  { name:'RTX 4070 Ti Super',   vram:16, bw: 672,  tdp:285, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'7B BF16 or ~20B INT4; good single-GPU sweet spot.' },
             '4080':    { name:'RTX 4080 Super',      vram:16, bw: 736,  tdp:320, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'similar to 4070 Ti Super; slightly higher BW.' },
-            '4090':    { name:'RTX 4090',            vram:24, bw:1008,  tdp:450, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'consumer flagship; 13B BF16, 32B INT4, 70B INT4 with KV pressure.' },
-            'rtx6000': { name:'RTX 6000 Ada',        vram:48, bw: 960,  tdp:300, fp8:true,  nvlink:'bridge', ecc:true,  dc:true,  role:'workstation flagship; 48 GB ECC, optional NVLink bridge for 2-card TP.' },
+            '4090':    { name:'RTX 4090',            vram:24, bw:1008,  tdp:450, fp8:true,  nvlink:'none',   ecc:false, dc:false, role:'consumer flagship; 8B BF16, 32B INT4; 70B INT4 (~40 GB) needs two cards.' },
+            'rtx6000': { name:'RTX 6000 Ada',        vram:48, bw: 960,  tdp:300, fp8:true,  nvlink:'none',   ecc:true,  dc:true,  role:'workstation flagship; 48 GB ECC; no NVLink, so 2-card TP runs over PCIe.' },
             'l4':      { name:'L4',                  vram:24, bw: 300,  tdp: 72, fp8:true,  nvlink:'none',   ecc:true,  dc:true,  role:'72 W single-slot edge / video transcoding card; modest BW.' },
             'l40':     { name:'L40',                 vram:48, bw: 864,  tdp:300, fp8:true,  nvlink:'none',   ecc:true,  dc:true,  role:'pre-L40S graphics+inference; superseded for AI by L40S.' },
             'l40s':    { name:'L40S',                vram:48, bw: 864,  tdp:350, fp8:true,  nvlink:'none',   ecc:true,  dc:true,  role:'cheap FP8 inference; 70B-FP8 across two cards over PCIe.' }
